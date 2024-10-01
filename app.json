@@ -7,7 +7,7 @@
     "backgroundTextStyle": "light",
     "backgroundColor": "#FAFAFA",
     "navigationBarBackgroundColor": "#FAFAFA",
-    "navigationBarTitleText": "面对面翻译",
+    "navigationBarTitleText": "语音对话",
     "navigationBarTextStyle": "black"
   },
   "plugins": {

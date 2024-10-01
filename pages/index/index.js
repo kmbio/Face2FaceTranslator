@@ -8,7 +8,7 @@ http://opensource.org/licenses/MIT
 
 Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
 */
-
+var that = this
 const app = getApp()
 
 const util = require('../../utils/util.js')
@@ -17,6 +17,27 @@ const plugin = requirePlugin("WechatSI")
 
 import { language } from '../../utils/conf.js'
 
+function formatDateTime() {
+  var date = new Date()
+  if (!(date instanceof Date)) {
+    console.error('参数必须是Date对象');
+    return '';
+  }
+  
+  let year = date.getFullYear(); // 获取年份
+  let month = date.getMonth() + 1; // 获取月份，月份从0开始计数，所以需要+1
+  let day = date.getDate(); // 获取日
+  let hours = date.getHours(); // 获取小时
+  let minutes = date.getMinutes(); // 获取分钟
+
+  // 补零函数，确保月、日、时、分都是两位数
+  function pad(number) {
+    return number < 10 ? '0' + number : number;
+  }
+
+  // 格式化日期和时间
+  return `${year}年${pad(month)}月${pad(day)}日 ${pad(hours)}时${pad(minutes)}分`;
+}
 
 // 获取**全局唯一**的语音识别管理器**recordRecoManager**
 const manager = plugin.getRecordRecognitionManager()
@@ -25,18 +46,18 @@ const manager = plugin.getRecordRecognitionManager()
 Page({
   data: {
     dialogList: [
-      // {
-      //   // 当前语音输入内容
-      //   create: '04/27 15:37',
-      //   lfrom: 'zh_CN',
-      //   lto: 'en_US',
-      //   text: '这是测试这是测试这是测试这是测试',
-      //   translateText: 'this is test.this is test.this is test.this is test.',
-      //   voicePath: '',
-      //   translateVoicePath: '',
-      //   autoPlay: false, // 自动播放背景音乐
-      //   id: 0,
-      // },
+      {
+        // 当前语音输入内容
+        create: formatDateTime(),
+        lfrom: 'zh_CN',
+        lto: 'en_US',
+        text: '欢迎使用讯飞大模型语音对话',
+        translateText: '你好！',
+        voicePath: '',
+        translateVoicePath: '',
+        autoPlay: false, // 自动播放背景音乐
+        id: 0,
+      },
     ],
     scroll_top: 10000, // 竖向滚动条位置
 
@@ -122,65 +143,110 @@ Page({
     let lfrom =  item.lfrom || 'zh_CN'
     let lto = item.lto || 'en_US'
 
-    plugin.translate({
-      lfrom: lfrom,
-      lto: lto,
-      content: item.text,
-      tts: true,
-      success: (resTrans)=>{
+    console.log(this.data.dialogList);
+    console.log(`item: ${item}`);
+    var that = this
+    // 改成2 个接口，1.请求 ai，2.文字转语音
+    // 请求 1
+    // 发送POST请求
+    const url = "https://spark-api-open.xf-yun.com/v1/chat/completions";
+    var tips = " - 如果答案超过最大字数，请删除未完成的回答，否则会让用户感到不适"
+wx.request({
+  url: url, // 你的接口地址
+  method: 'POST',
+  data: {
+    "max_tokens":80,
 
-        let passRetcode = [
-          0, // 翻译合成成功
-          -10006, // 翻译成功，合成失败
-          -10007, // 翻译成功，传入了不支持的语音合成语言
-          -10008, // 翻译成功，语音合成达到频率限制
-        ]
-
-        if(passRetcode.indexOf(resTrans.retcode) >= 0 ) {
-          let tmpDialogList = this.data.dialogList.slice(0)
-
-          if(!isNaN(index)) {
-
-            let tmpTranslate = Object.assign({}, item, {
-              autoPlay: true, // 自动播放背景音乐
-              translateText: resTrans.result,
-              translateVoicePath: resTrans.filename || "",
-              translateVoiceExpiredTime: resTrans.expired_time || 0
-            })
-
-            tmpDialogList[index] = tmpTranslate
-
-
-            this.setData({
-              dialogList: tmpDialogList,
-              bottomButtonDisabled: false,
-              recording: false,
-            })
-
-            this.scrollToNew();
-
-          } else {
-            console.error("index error", resTrans, item)
-          }
-        } else {
-          console.warn("翻译失败", resTrans, item)
+    "model": "generalv3.5", 
+    "messages": [
+        {
+            "role": "user",
+            "content": item.text
         }
-
+    ],},
+  header: {
+    "Authorization": "Bearer htjXrgJvxdmIBBVCRWZB:WrTLiBTnyJUypIyTfnmL" // 注意此处替换自己的APIPassword
+  },
+  success(res) {
+    console.log('请求成功', res)
+    console.log(typeof res);
+    var answer = res.data.choices[0].message.content
+    console.log(answer);
+    // 请求 2
+//     answer = `
+//     合肥今天天气状况为阴，温度范围在19℃~26℃，风向风力为东北风微风。建议市民根据天气变化适时调整着装，早晚可适当增添衣物以防凉。
+// 具体天气情况如下：
+// - 天气：阴。
+// - 最高温度：26℃。
+// - 最低温度：19℃。
+// `
+    plugin.textToSpeech({
+      lang: "zh_CN",
+      tts: true,
+      content: answer,
+      success: function(resTrans) {
+          console.log("succ tts", resTrans.filename)   
+          let passRetcode = [
+            0, // 翻译合成成功
+            -20001,//语音合成语言格式出错
+            -20002,//	输入的待合成格式不正确
+            -20003,//	语音合成内部错误
+            -20005,//	网络错误
+            -40001//	接口调用频率达到限制，请联系插件开发者
+          ]
+          if(passRetcode.indexOf(resTrans.retcode) >= 0 ) {
+            let tmpDialogList = that.data.dialogList.slice(0)
+            console.log(tmpDialogList);
+            if(!isNaN(index)) {
+  
+              let tmpTranslate = Object.assign({}, item, {
+                autoPlay: true, // 自动播放背景音乐
+                translateText: resTrans.origin,
+                translateVoicePath: resTrans.filename || "",
+                translateVoiceExpiredTime: resTrans.expired_time || 0
+              })
+  
+              tmpDialogList[index] = tmpTranslate
+  
+  
+              that.setData({
+                dialogList: tmpDialogList,
+                bottomButtonDisabled: false,
+                recording: false,
+              })
+  
+              that.scrollToNew();
+  
+            } else {
+              console.error("index error", resTrans, item)
+            }
+          } else {
+            console.warn("回答失败", resTrans, item)
+          }
       },
       fail: function(resTrans) {
         console.error("调用失败",resTrans, item)
-        this.setData({
+        that.setData({
           bottomButtonDisabled: false,
           recording: false,
         })
       },
       complete: resTrans => {
-        this.setData({
+        that.setData({
           recordStatus: 1,
         })
         wx.hideLoading()
       }
     })
+
+
+  },
+  fail(error) {
+    console.error('请求失败', error)
+  }
+})
+
+
 
   },
 
@@ -213,7 +279,7 @@ Page({
     }
 
     let lto = item.lto || 'en_US'
-
+    console.log('语音文件过期，重新合成');
     plugin.textToSpeech({
       lang: lto,
       content: item.translateText,
@@ -335,7 +401,7 @@ Page({
 
       let currentData = Object.assign({}, this.data.currentTranslate, {
                         text: res.result,
-                        translateText: '正在翻译中',
+                        translateText: '正在思考中',
                         id: lastId,
                         voicePath: res.tempFilePath
                       })
@@ -442,6 +508,9 @@ Page({
   },
 
   onLoad: function () {
+
+    
+
     this.getHistory()
     this.initRecord()
 
@@ -450,6 +519,7 @@ Page({
 
 
     app.getRecordAuth()
+
   },
 
   onHide: function() {

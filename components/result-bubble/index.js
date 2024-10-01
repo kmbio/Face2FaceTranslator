@@ -29,7 +29,7 @@ Component({
       type: Object,
       value: {},
       observer: function(newVal, oldVal){
-
+        console.log(`文字改变，原：${oldVal},新：${newVal}`);
         // 翻译完成后，文字有改变触发重新翻译
         if(this.data.recordStatus == 2 && oldVal.text && oldVal.text != '' && newVal.text != oldVal.text) {
           this.triggerEvent('translate', {
